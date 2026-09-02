@@ -1,0 +1,6 @@
+{
+  "name": "PG E-SPORTS 2.0",
+  "description": "Play. Compete. Win. Production-grade esports tournament platform with real-time match operations, leaderboards, room management, PG Rank, and multi-role dashboards.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
