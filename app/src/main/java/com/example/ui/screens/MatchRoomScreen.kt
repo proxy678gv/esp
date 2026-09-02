@@ -39,6 +39,7 @@ fun MatchRoomScreen(
     val matchRoom by viewModel.getMatchRoom(tournament.id).collectAsState(initial = null)
     val results by viewModel.getTournamentResults(tournament.id).collectAsState(initial = emptyList())
     val userRegistrations by viewModel.userRegistrations.collectAsState()
+    val user by viewModel.currentUser.collectAsState()
 
     val myReg = remember(userRegistrations, tournament) {
         userRegistrations.find { it.tournamentId == tournament.id }
@@ -127,6 +128,58 @@ fun MatchRoomScreen(
                                 glowColor = CyberOrange,
                                 contentColor = DarkBackground
                             )
+                        }
+                    }
+                }
+            }
+
+            // Player Free Fire UID Card
+            item {
+                user?.let { u ->
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        color = Color(0xFF140D0B),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFFF5722).copy(alpha = 0.4f))
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(
+                                modifier = Modifier.weight(1f),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(32.dp)
+                                        .clip(CircleShape)
+                                        .background(Color(0xFFFF5722).copy(alpha = 0.2f)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(Icons.Default.Whatshot, contentDescription = null, tint = Color(0xFFFF5722), modifier = Modifier.size(18.dp))
+                                }
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Column {
+                                    Text("PLAYER FREE FIRE UID", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = TextMuted)
+                                    Text("${u.freeFireUid} • ${u.freeFireIgn}", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                                }
+                            }
+                            Surface(
+                                color = Color(0xFFFF5722).copy(alpha = 0.2f),
+                                shape = RoundedCornerShape(6.dp)
+                            ) {
+                                Text(
+                                    text = "Slot #${myReg?.slotNumber ?: 1}",
+                                    color = Color(0xFFFFB300),
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                )
+                            }
                         }
                     }
                 }

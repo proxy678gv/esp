@@ -7,6 +7,7 @@ import com.example.data.local.AppDatabase
 import com.example.data.localization.AppLanguage
 import com.example.data.model.*
 import com.example.data.repository.PGEsportsRepository
+import com.example.payment.PaymentResultData
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import java.util.UUID
@@ -133,6 +134,60 @@ class PGEsportsViewModel(application: Application) : AndroidViewModel(applicatio
             } else {
                 _uiEvent.emit(UiNotification("Insufficient wallet balance! Please add funds.", isError = true))
             }
+        }
+    }
+
+    /**
+     * Complete entry fee transaction following Razorpay SDK verification
+     */
+    fun processRazorpayTournamentEntry(
+        tournament: TournamentEntity,
+        team: TeamEntity,
+        paymentResult: PaymentResultData,
+        onSuccess: () -> Unit
+    ) {
+        viewModelScope.launch {
+            val success = repository.processRazorpayTournamentEntryPayment(tournament, team, paymentResult)
+            if (success) {
+                _uiEvent.emit(UiNotification("Razorpay Payment Verified! Slot booked for ${team.name} 🎮"))
+                onSuccess()
+            } else {
+                _uiEvent.emit(UiNotification("Unable to confirm slot registration.", isError = true))
+            }
+        }
+    }
+
+    /**
+     * Record and notify user of failed Razorpay payment attempt
+     */
+    fun recordFailedRazorpayPayment(
+        tournamentId: String,
+        tournamentTitle: String,
+        teamName: String,
+        amount: Double,
+        errorCode: Int,
+        errorMessage: String
+    ) {
+        viewModelScope.launch {
+            repository.recordFailedRazorpayPayment(
+                tournamentId = tournamentId,
+                tournamentTitle = tournamentTitle,
+                teamName = teamName,
+                amount = amount,
+                errorCode = errorCode,
+                errorMessage = errorMessage
+            )
+            _uiEvent.emit(UiNotification("Payment Failed ($errorMessage). Recorded in audit ledger.", isError = true))
+        }
+    }
+
+    /**
+     * Add wallet funds directly via Razorpay SDK
+     */
+    fun processRazorpayDeposit(amount: Double, paymentResult: PaymentResultData) {
+        viewModelScope.launch {
+            repository.processRazorpayWalletDeposit(amount, paymentResult)
+            _uiEvent.emit(UiNotification("₹${amount.toInt()} added to PG Wallet via Razorpay! 💳"))
         }
     }
 
@@ -341,6 +396,29 @@ class PGEsportsViewModel(application: Application) : AndroidViewModel(applicatio
 
     fun getTournamentRegistrations(tournamentId: String): Flow<List<RegistrationEntity>> {
         return repository.getRegistrationsForTournament(tournamentId)
+    }
+
+    fun updateFreeFireAccount(
+        uid: String,
+        ign: String,
+        level: Int,
+        rankTier: String,
+        serverRegion: String,
+        battleRole: String,
+        guildName: String
+    ) {
+        viewModelScope.launch {
+            repository.updateFreeFireAccountDetails(
+                uid = uid,
+                ign = ign,
+                level = level,
+                rankTier = rankTier,
+                serverRegion = serverRegion,
+                battleRole = battleRole,
+                guildName = guildName
+            )
+            _uiEvent.emit(UiNotification("Free Fire Account Details Verified & Saved! 🎮"))
+        }
     }
 
     // --- Google Account & Database Sync ---

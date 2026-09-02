@@ -29,6 +29,18 @@ interface AppDao {
     @Query("UPDATE users SET googleId = :googleId, googleEmail = :googleEmail, googleDisplayName = :googleDisplayName, isGoogleLinked = :isLinked, lastCloudSyncTimestamp = :syncTime WHERE id = :userId")
     suspend fun updateGoogleAccount(userId: String, googleId: String, googleEmail: String, googleDisplayName: String, isLinked: Boolean, syncTime: Long)
 
+    @Query("UPDATE users SET freeFireUid = :uid, freeFireIgn = :ign, freeFireLevel = :level, freeFireRankTier = :rankTier, freeFireServerRegion = :serverRegion, freeFireBattleRole = :battleRole, freeFireGuildName = :guildName, inGameId = :ign WHERE id = :userId")
+    suspend fun updateFreeFireAccountDetails(
+        userId: String,
+        uid: String,
+        ign: String,
+        level: Int,
+        rankTier: String,
+        serverRegion: String,
+        battleRole: String,
+        guildName: String
+    )
+
     @Query("UPDATE users SET lastCloudSyncTimestamp = :syncTime WHERE id = :userId")
     suspend fun updateCloudSyncTimestamp(userId: String, syncTime: Long)
 

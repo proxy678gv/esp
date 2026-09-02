@@ -491,7 +491,45 @@ fun TournamentDetailScreen(
                 )
             },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    // Verified Player Free Fire UID Card
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(10.dp),
+                        color = Color(0xFF1F110B),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFFF5722).copy(alpha = 0.5f))
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.Whatshot, contentDescription = null, tint = Color(0xFFFF5722), modifier = Modifier.size(20.dp))
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Column {
+                                    Text("Free Fire Player UID", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = TextMuted, fontFamily = SFProFontFamily)
+                                    Text("${user?.freeFireUid ?: "1928374650"} (${user?.freeFireIgn ?: user?.inGameId ?: "IGN"})", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White, fontFamily = SFProFontFamily)
+                                }
+                            }
+                            Surface(
+                                color = Color(0xFFFF5722).copy(alpha = 0.2f),
+                                shape = RoundedCornerShape(4.dp)
+                            ) {
+                                Text(
+                                    text = user?.freeFireServerRegion ?: "IND Server",
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFFFFB300),
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                    fontFamily = SFProFontFamily
+                                )
+                            }
+                        }
+                    }
+
                     Text(
                         text = "1. Select Registered Squad",
                         fontWeight = FontWeight.Bold,
@@ -635,16 +673,23 @@ fun TournamentDetailScreen(
 
     // Razorpay Checkout Modal for Tournament Entry
     if (showRazorpayTournamentCheckout) {
-        RazorpayCheckoutDialog(
-            amount = tournament.entryFee,
-            description = "Entry Fee: ${tournament.title}",
-            customerEmail = user?.email ?: "player@pgesports.com",
-            onDismiss = { showRazorpayTournamentCheckout = false },
-            onPaymentSuccess = { result ->
-                // First credit deposit from Razorpay, then complete registration
-                viewModel.addDeposit(result.amount)
-                selectedTeam?.let { team ->
-                    viewModel.registerTournament(tournament, team) {
+        selectedTeam?.let { team ->
+            RazorpayCheckoutDialog(
+                amount = tournament.entryFee,
+                description = "Entry Fee: ${tournament.title}",
+                customerEmail = user?.email ?: "player@pgesports.com",
+                customerPhone = user?.mobile ?: "+91 98765 43210",
+                tournament = tournament,
+                team = team,
+                user = user,
+                type = com.example.payment.PaymentTransactionType.TOURNAMENT_ENTRY_FEE,
+                onDismiss = { showRazorpayTournamentCheckout = false },
+                onPaymentSuccess = { result ->
+                    viewModel.processRazorpayTournamentEntry(
+                        tournament = tournament,
+                        team = team,
+                        paymentResult = result
+                    ) {
                         showRazorpayTournamentCheckout = false
                         showRegistrationDialog = false
                         MatchNotificationHelper.schedule15MinReminder(
@@ -654,12 +699,22 @@ fun TournamentDetailScreen(
                             matchStartTimeMillis = tournament.startDateTimeMillis,
                             roomId = "9823412",
                             roomPassword = "PG99",
-                            slotNumber = 12
+                            slotNumber = tournament.registeredTeamsCount + 1
                         )
-                        Toast.makeText(context, "Razorpay Payment Verified! 15-min match alarm scheduled ⏰", Toast.LENGTH_LONG).show()
+                        Toast.makeText(context, "Razorpay Payment Verified! Slot Confirmed & 15m alarm scheduled ⏰", Toast.LENGTH_LONG).show()
                     }
+                },
+                onPaymentError = { errorResult ->
+                    viewModel.recordFailedRazorpayPayment(
+                        tournamentId = tournament.id,
+                        tournamentTitle = tournament.title,
+                        teamName = team.name,
+                        amount = tournament.entryFee,
+                        errorCode = errorResult.errorCode ?: -1,
+                        errorMessage = errorResult.errorMessage ?: "Payment declined"
+                    )
                 }
-            }
-        )
+            )
+        }
     }
 }

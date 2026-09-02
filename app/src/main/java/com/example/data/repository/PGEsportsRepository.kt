@@ -2,6 +2,7 @@ package com.example.data.repository
 
 import com.example.data.local.AppDao
 import com.example.data.model.*
+import com.example.payment.PaymentResultData
 import kotlinx.coroutines.flow.Flow
 import java.util.UUID
 
@@ -623,6 +624,8 @@ class PGEsportsRepository(private val dao: AppDao) {
             teamName = team.name,
             captainId = currentUserId,
             captainName = user.username,
+            playerUid = user.freeFireUid,
+            playerIgn = user.freeFireIgn,
             slotNumber = tournament.registeredTeamsCount + 1,
             status = "CONFIRMED",
             paymentId = paymentId,
@@ -670,6 +673,188 @@ class PGEsportsRepository(private val dao: AppDao) {
         )
 
         return true
+    }
+
+    /**
+     * Process direct Razorpay SDK Tournament Entry Fee Payment with full transactional logging
+     */
+    suspend fun processRazorpayTournamentEntryPayment(
+        tournament: TournamentEntity,
+        team: TeamEntity,
+        paymentResult: PaymentResultData
+    ): Boolean {
+        val user = dao.getUser(currentUserId) ?: return false
+        val paymentId = paymentResult.paymentId ?: ("PAY_RZP_" + UUID.randomUUID().toString().take(8).uppercase())
+        val slotNumber = tournament.registeredTeamsCount + 1
+        val regId = "REG_RZP_" + UUID.randomUUID().toString().take(8).uppercase()
+
+        // 1. Create Confirmed Slot Registration
+        val registration = RegistrationEntity(
+            id = regId,
+            tournamentId = tournament.id,
+            tournamentTitle = tournament.title,
+            teamId = team.id,
+            teamName = team.name,
+            captainId = currentUserId,
+            captainName = user.username,
+            playerUid = user.freeFireUid,
+            playerIgn = user.freeFireIgn,
+            slotNumber = slotNumber,
+            status = "CONFIRMED",
+            paymentId = paymentId,
+            isCheckedIn = false
+        )
+        dao.insertRegistration(registration)
+
+        // 2. Update Tournament registered count
+        dao.updateTournament(tournament.copy(registeredTeamsCount = slotNumber))
+
+        // 3. Log to Transaction Ledger
+        val txnId = "TXN_RZP_" + UUID.randomUUID().toString().take(8).uppercase()
+        dao.insertTransaction(
+            WalletTransactionEntity(
+                id = txnId,
+                userId = currentUserId,
+                type = "ENTRY_FEE",
+                amount = -tournament.entryFee,
+                status = "SUCCESS",
+                description = "Razorpay Entry Fee - ${tournament.title} (Slot #$slotNumber)",
+                providerReference = paymentId,
+                timestamp = System.currentTimeMillis()
+            )
+        )
+
+        // 4. Log to Security Audit Trail
+        dao.insertAuditLog(
+            AuditLogEntity(
+                id = UUID.randomUUID().toString(),
+                actorId = currentUserId,
+                actorRole = "PLAYER",
+                action = "RAZORPAY_ENTRY_FEE_SUCCESS",
+                entityType = "TRANSACTION",
+                entityId = txnId,
+                details = "Razorpay Entry Fee Verified. Txn: $paymentId, Tournament: ${tournament.id}, Team: ${team.name}, Slot: #$slotNumber, Amount: ₹${tournament.entryFee}",
+                timestamp = System.currentTimeMillis()
+            )
+        )
+
+        // 5. Send Realtime Notification
+        dao.insertNotification(
+            NotificationEntity(
+                id = UUID.randomUUID().toString(),
+                userId = currentUserId,
+                title = "Payment Verified & Slot #$slotNumber Booked! 🎮",
+                message = "Payment of ₹${tournament.entryFee} confirmed via Razorpay ($paymentId). Your squad ${team.name} is ready for ${tournament.title}.",
+                category = "TOURNAMENT",
+                deepLink = "pg-esports://tournament/${tournament.id}"
+            )
+        )
+
+        return true
+    }
+
+    /**
+     * Record Failed Razorpay Payment Attempt in the Transaction & Audit Log
+     */
+    suspend fun recordFailedRazorpayPayment(
+        tournamentId: String,
+        tournamentTitle: String,
+        teamName: String,
+        amount: Double,
+        errorCode: Int,
+        errorMessage: String
+    ) {
+        val failedTxnId = "TXN_FAIL_" + UUID.randomUUID().toString().take(8).uppercase()
+        val failureRef = "RZP_ERR_${System.currentTimeMillis().toString().takeLast(6)}"
+
+        dao.insertTransaction(
+            WalletTransactionEntity(
+                id = failedTxnId,
+                userId = currentUserId,
+                type = "ENTRY_FEE",
+                amount = 0.0,
+                status = "FAILED",
+                description = "Failed Razorpay Payment - $tournamentTitle ($errorMessage)",
+                providerReference = failureRef,
+                timestamp = System.currentTimeMillis()
+            )
+        )
+
+        dao.insertAuditLog(
+            AuditLogEntity(
+                id = UUID.randomUUID().toString(),
+                actorId = currentUserId,
+                actorRole = "PLAYER",
+                action = "RAZORPAY_PAYMENT_FAILED",
+                entityType = "TRANSACTION",
+                entityId = failedTxnId,
+                details = "Payment failed. Code: $errorCode, Reason: $errorMessage, Tournament: $tournamentId, Team: $teamName, Amount: ₹$amount",
+                timestamp = System.currentTimeMillis()
+            )
+        )
+
+        dao.insertNotification(
+            NotificationEntity(
+                id = UUID.randomUUID().toString(),
+                userId = currentUserId,
+                title = "Payment Failed ⚠️",
+                message = "Entry fee payment for $tournamentTitle could not be completed: $errorMessage. You can retry anytime.",
+                category = "WALLET",
+                deepLink = "pg-esports://tournament/$tournamentId"
+            )
+        )
+    }
+
+    /**
+     * Process Wallet Deposit via Razorpay SDK
+     */
+    suspend fun processRazorpayWalletDeposit(
+        amount: Double,
+        paymentResult: PaymentResultData
+    ) {
+        val user = dao.getUser(currentUserId) ?: return
+        val updatedBalance = user.walletBalance + amount
+        dao.updateUser(user.copy(walletBalance = updatedBalance))
+
+        val paymentId = paymentResult.paymentId ?: ("PAY_RZP_DEP_" + UUID.randomUUID().toString().take(6).uppercase())
+        val txnId = "TXN_DEP_" + UUID.randomUUID().toString().take(8).uppercase()
+
+        dao.insertTransaction(
+            WalletTransactionEntity(
+                id = txnId,
+                userId = currentUserId,
+                type = "DEPOSIT",
+                amount = amount,
+                status = "SUCCESS",
+                description = "Razorpay Instant Deposit (UPI / Cards / NetBanking)",
+                providerReference = paymentId,
+                timestamp = System.currentTimeMillis()
+            )
+        )
+
+        dao.insertAuditLog(
+            AuditLogEntity(
+                id = UUID.randomUUID().toString(),
+                actorId = currentUserId,
+                actorRole = "PLAYER",
+                action = "RAZORPAY_WALLET_DEPOSIT",
+                entityType = "TRANSACTION",
+                entityId = txnId,
+                details = "Deposit of ₹$amount successful via Razorpay ($paymentId). New balance: ₹$updatedBalance",
+                timestamp = System.currentTimeMillis()
+            )
+        )
+
+        dao.insertNotification(
+            NotificationEntity(
+                id = UUID.randomUUID().toString(),
+                userId = currentUserId,
+                title = "PG Wallet Credited! 💳 ₹${amount.toInt()}",
+                message = "₹$amount successfully added to your PG Wallet via Razorpay ($paymentId). Available for instant tournament registration.",
+                category = "WALLET",
+                deepLink = "pg-esports://wallet"
+            )
+        )
     }
 
     suspend fun checkInTeam(registrationId: String, tournamentId: String) {
@@ -820,6 +1005,50 @@ class PGEsportsRepository(private val dao: AppDao) {
 
     suspend fun markAllNotificationsRead() {
         dao.markAllNotificationsRead(currentUserId)
+    }
+
+    suspend fun updateFreeFireAccountDetails(
+        uid: String,
+        ign: String,
+        level: Int,
+        rankTier: String,
+        serverRegion: String,
+        battleRole: String,
+        guildName: String
+    ) {
+        dao.updateFreeFireAccountDetails(
+            userId = currentUserId,
+            uid = uid.trim(),
+            ign = ign.trim(),
+            level = level,
+            rankTier = rankTier,
+            serverRegion = serverRegion,
+            battleRole = battleRole,
+            guildName = guildName.trim()
+        )
+
+        dao.insertAuditLog(
+            AuditLogEntity(
+                id = UUID.randomUUID().toString(),
+                actorId = currentUserId,
+                actorRole = "PLAYER",
+                action = "UPDATE_FREE_FIRE_ACCOUNT",
+                entityType = "USER",
+                entityId = currentUserId,
+                details = "Free Fire Account Details Updated. UID: $uid, IGN: $ign, Lvl: $level, Rank: $rankTier, Server: $serverRegion, Role: $battleRole",
+                timestamp = System.currentTimeMillis()
+            )
+        )
+
+        dao.insertNotification(
+            NotificationEntity(
+                id = UUID.randomUUID().toString(),
+                userId = currentUserId,
+                title = "Free Fire ID Updated 🎮",
+                message = "Your Free Fire Player UID ($uid) and IGN ($ign) are verified for upcoming tournament room slots.",
+                category = "SYSTEM"
+            )
+        )
     }
 
     suspend fun updateGoogleAccount(

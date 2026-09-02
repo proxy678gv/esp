@@ -266,10 +266,12 @@ fun WalletScreen(
             amount = razorpayAmountToPay,
             description = "PG Wallet Deposit",
             customerEmail = user?.email ?: "player@pgesports.com",
-            customerPhone = "+91 98765 43210",
+            customerPhone = user?.mobile ?: "+91 98765 43210",
+            user = user,
+            type = com.example.payment.PaymentTransactionType.WALLET_DEPOSIT,
             onDismiss = { showRazorpayCheckout = false },
             onPaymentSuccess = { result ->
-                viewModel.addDeposit(result.amount)
+                viewModel.processRazorpayDeposit(result.amount, result)
                 showRazorpayCheckout = false
             }
         )

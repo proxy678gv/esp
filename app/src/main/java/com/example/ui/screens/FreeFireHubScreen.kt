@@ -31,6 +31,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.R
 import com.example.data.model.*
+import com.example.payment.PaymentResultData
 import com.example.ui.components.*
 import com.example.ui.theme.*
 import com.example.ui.viewmodel.PGEsportsViewModel
@@ -62,7 +63,8 @@ fun FreeFireHubScreen(
     var generatedVoucherCode by remember { mutableStateOf("") }
     var selectedDiamondPack by remember { mutableStateOf<FFDiamondPack?>(null) }
     var showRazorpayDiamondCheckout by remember { mutableStateOf(false) }
-    var razorpayPaymentInfo by remember { mutableStateOf<RazorpayPaymentResult?>(null) }
+    var razorpayPaymentInfo by remember { mutableStateOf<PaymentResultData?>(null) }
+    var showFreeFireEditDialog by remember { mutableStateOf(false) }
 
     // Weapon Compare State
     var showWeaponCompareModal by remember { mutableStateOf(false) }
@@ -149,6 +151,79 @@ fun FreeFireHubScreen(
                 .background(DarkBackground)
                 .padding(padding)
         ) {
+            // --- Free Fire Player UID & Account Strip ---
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 6.dp),
+                shape = RoundedCornerShape(10.dp),
+                color = Color(0xFF1B100B),
+                border = BorderStroke(1.dp, Color(0xFFFF5722).copy(alpha = 0.4f))
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        modifier = Modifier.weight(1f),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(28.dp)
+                                .clip(CircleShape)
+                                .background(Color(0xFFFF5722).copy(alpha = 0.2f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(Icons.Default.Whatshot, contentDescription = null, tint = Color(0xFFFF5722), modifier = Modifier.size(16.dp))
+                        }
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Column {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    text = "UID: ${user?.freeFireUid ?: "1928374650"}",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Black,
+                                    color = Color.White,
+                                    fontFamily = SFProFontFamily
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "•  ${user?.freeFireIgn ?: user?.inGameId ?: "PG_THUNDER_99"}",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = NeonGreen,
+                                    fontFamily = SFProFontFamily
+                                )
+                            }
+                            Text(
+                                text = "Lvl ${user?.freeFireLevel ?: 72} • ${user?.freeFireRankTier ?: "Grandmaster"} • ${user?.freeFireServerRegion ?: "IND Server"}",
+                                fontSize = 10.sp,
+                                color = TextSecondary,
+                                fontFamily = SFProFontFamily
+                            )
+                        }
+                    }
+
+                    // Manage / Edit Account Button
+                    OutlinedButton(
+                        onClick = { showFreeFireEditDialog = true },
+                        shape = RoundedCornerShape(8.dp),
+                        border = BorderStroke(0.5.dp, Color(0xFFFFB300)),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFFFB300)),
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                        modifier = Modifier.height(30.dp)
+                    ) {
+                        Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(12.dp))
+                        Spacer(modifier = Modifier.width(3.dp))
+                        Text("Edit ID", fontSize = 10.sp, fontWeight = FontWeight.Bold, fontFamily = SFProFontFamily)
+                    }
+                }
+            }
+
             // --- Tab Selector Bar ---
             LazyRow(
                 modifier = Modifier
@@ -352,6 +427,17 @@ fun FreeFireHubScreen(
                         showRedeemVoucherDialog = false
                     }
                 )
+            }
+        )
+    }
+
+    // --- Free Fire Account Details Editor Dialog ---
+    if (showFreeFireEditDialog) {
+        EditFreeFireAccountDialog(
+            user = user,
+            onDismiss = { showFreeFireEditDialog = false },
+            onSaveDetails = { uid, ign, level, rank, region, role, guild ->
+                viewModel.updateFreeFireAccount(uid, ign, level, rank, region, role, guild)
             }
         )
     }

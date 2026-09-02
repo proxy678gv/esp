@@ -37,6 +37,11 @@ import com.example.ui.viewmodel.PGEsportsViewModel
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
+import com.example.payment.RazorpayIntegrationService
+import com.example.payment.RazorpayPaymentManager
+import com.razorpay.PaymentData
+import com.razorpay.PaymentResultWithDataListener
+
 enum class Screen {
     HOME,
     FREE_FIRE_HUB,
@@ -54,9 +59,11 @@ enum class Screen {
     PDF_DOC
 }
 
-class MainActivity : ComponentActivity() {
+class MainActivity : ComponentActivity(), PaymentResultWithDataListener {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        RazorpayIntegrationService.getInstance().initializeSdk(this, isTestMode = true)
+        RazorpayPaymentManager.preload(this)
         enableEdgeToEdge()
         val incomingIntent = intent
         setContent {
@@ -64,6 +71,16 @@ class MainActivity : ComponentActivity() {
                 PGEsportsApp(intent = incomingIntent)
             }
         }
+    }
+
+    override fun onPaymentSuccess(razorpayPaymentId: String?, paymentData: PaymentData?) {
+        RazorpayIntegrationService.getInstance().onPaymentSuccessCallback(razorpayPaymentId, paymentData)
+        RazorpayPaymentManager.handlePaymentSuccess(razorpayPaymentId, paymentData)
+    }
+
+    override fun onPaymentError(errorCode: Int, errorDescription: String?, paymentData: PaymentData?) {
+        RazorpayIntegrationService.getInstance().onPaymentErrorCallback(errorCode, errorDescription, paymentData)
+        RazorpayPaymentManager.handlePaymentError(errorCode, errorDescription, paymentData)
     }
 }
 

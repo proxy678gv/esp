@@ -44,6 +44,7 @@ fun ProfileScreen(
 
     var showRulebookDialog by remember { mutableStateOf(false) }
     var showGoogleAccountDialog by remember { mutableStateOf(false) }
+    var showFreeFireAccountDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         viewModel.fetchDatabaseStats()
@@ -51,6 +52,7 @@ fun ProfileScreen(
 
     val settingsOptions = remember {
         listOf(
+            ProfileOption(Icons.Default.Whatshot, "Free Fire Player Account & UID") { showFreeFireAccountDialog = true },
             ProfileOption(Icons.Default.PictureAsPdf, "PG E-SPORTS 2.0 Spec PDF", onNavigateToPdfDoc),
             ProfileOption(Icons.Default.AccountBalanceWallet, "Wallet & Payouts", onNavigateToWallet),
             ProfileOption(Icons.Default.CloudSync, "Google ID & Database Sync") { showGoogleAccountDialog = true },
@@ -109,13 +111,13 @@ fun ProfileScreen(
                                 PGRankBadge(tier = u.rankTier)
                             }
                             Text(
-                                text = "IGN: ${u.inGameId} • ${u.fullName}",
+                                text = "IGN: ${u.freeFireIgn} • ${u.fullName}",
                                 color = TextSecondary,
                                 fontSize = 12.sp,
                                 fontFamily = SFProFontFamily
                             )
                             Text(
-                                text = "PG ID: #${u.id.takeLast(8)}",
+                                text = "PG ID: #${u.id.takeLast(8)} • FF UID: ${u.freeFireUid}",
                                 color = TextMuted,
                                 fontSize = 11.sp,
                                 fontFamily = SFProFontFamily
@@ -138,6 +140,14 @@ fun ProfileScreen(
                     }
                 }
             }
+        }
+
+        // Free Fire Player Account Details Card (UID, IGN, Level, Rank, Role, Server)
+        item {
+            FreeFireAccountCard(
+                user = user,
+                onEditDetails = { showFreeFireAccountDialog = true }
+            )
         }
 
         // Google Account & Database Info Card
@@ -235,6 +245,17 @@ fun ProfileScreen(
             },
             onSyncNow = {
                 viewModel.syncDatabaseWithCloud()
+            }
+        )
+    }
+
+    // Free Fire Account Manager Dialog
+    if (showFreeFireAccountDialog) {
+        EditFreeFireAccountDialog(
+            user = user,
+            onDismiss = { showFreeFireAccountDialog = false },
+            onSaveDetails = { uid, ign, level, rank, region, role, guild ->
+                viewModel.updateFreeFireAccount(uid, ign, level, rank, region, role, guild)
             }
         )
     }
